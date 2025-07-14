@@ -7,10 +7,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// MongoDB connection
-console.log("Connecting to MongoDB...");
-console.log("Mongo URI:", process.env.MONGODB_URI);
-
 const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/logging-middleware';
 mongoose.connect(mongoUri)
   .then(() => {
@@ -24,11 +20,11 @@ const urlSchema = new mongoose.Schema({
   originalUrl: { type: String, required: true },
   shortId: { type: String, required: true, unique: true },
   createdAt: { type: Date, default: Date.now },
+  expiresAt: { type: Date, required: true },
 });
 
 const Url = mongoose.model('Url', urlSchema);
 
-// Helper to generate short ID
 function generateShortId(length = 6) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let result = '';
@@ -38,17 +34,20 @@ function generateShortId(length = 6) {
   return result;
 }
 
-// API to shorten URL
-app.post('/api/shorten', async (req, res) => {
+function asyncHandler(fn) {
+  return function (req, res, next) {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+}
+
+app.post('/api/shorten', asyncHandler(async (req, res) => {
   const { originalUrl } = req.body;
   if (!originalUrl) return res.status(400).json({ status: false, message: 'URL is required' });
-  // Validate URL
   try {
     new URL(originalUrl);
   } catch {
     return res.status(400).json({ status: false, message: 'Invalid URL' });
   }
-  // Check for existing URL
   let url = await Url.findOne({ originalUrl });
   if (url) {
     return res.json({
@@ -61,11 +60,11 @@ app.post('/api/shorten', async (req, res) => {
     });
   }
   let shortId = generateShortId();
-  // Ensure unique shortId
   while (await Url.findOne({ shortId })) {
     shortId = generateShortId();
   }
-  url = new Url({ originalUrl, shortId });
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  url = new Url({ originalUrl, shortId, expiresAt });
   await url.save();
   res.json({
     status: true,
@@ -75,29 +74,38 @@ app.post('/api/shorten', async (req, res) => {
       urlCode: url.shortId
     }
   });
-});
+}));
 
-// Redirect short URL to original
-app.get('/:shortId', async (req, res) => {
+app.get('/:shortId', asyncHandler(async (req, res) => {
   const { shortId } = req.params;
   if (!shortId) return res.status(400).json({ status: false, message: 'Short code is required' });
   const url = await Url.findOne({ shortId });
   if (url) {
+    if (new Date() > url.expiresAt) {
+      return res.status(410).json({ status: false, message: 'URL has expired' });
+    }
     return res.redirect(302, url.originalUrl);
   } else {
     return res.status(404).json({ status: false, message: 'URL not found' });
   }
-});
+}));
 
-// Get all shortened URLs
-app.get('/api/urls', async (req, res) => {
+app.get('/api/urls', asyncHandler(async (req, res) => {
   const urls = await Url.find().sort({ createdAt: -1 });
   res.json({ status: true, data: urls });
-});
+}));
 
-// Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error('Error:', err);
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ status: false, message: err.message });
+  }
+  if (err.name === 'CastError') {
+    return res.status(400).json({ status: false, message: 'Invalid ID format' });
+  }
+  if (err.code === 11000) {
+    return res.status(409).json({ status: false, message: 'Duplicate entry' });
+  }
   res.status(500).json({ status: false, message: 'Something went wrong!' });
 });
 
