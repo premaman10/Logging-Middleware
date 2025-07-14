@@ -8,8 +8,17 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB connection
+console.log("Connecting to MongoDB...");
+console.log("Mongo URI:", process.env.MONGODB_URI);
+
 const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/logging-middleware';
-mongoose.connect(mongoUri);
+mongoose.connect(mongoUri)
+  .then(() => {
+    console.log("MongoDB connected successfully.");
+  })
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+  });
 
 const urlSchema = new mongoose.Schema({
   originalUrl: { type: String, required: true },
