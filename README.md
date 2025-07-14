@@ -35,14 +35,6 @@ A full stack URL shortener application with a modern UI, efficient backend, and 
 
 ---
 
-## 🖼️ Database & Architecture Overview
-
-### MongoDB Cluster Screenshot
-
-![MongoDB Cluster]("C:\Users\amanp\Pictures\Screenshots\Screenshot 2025-07-14 121415.png")
-
-
-
 ## 📦 Tech Stack
 
 | Layer       | Technology           |
@@ -54,10 +46,3 @@ A full stack URL shortener application with a modern UI, efficient backend, and 
 
 ---
 
-## 🛠️ Setup Instructions
-
-### 1. Clone the Repo
-
-```bash
-git clone https://github.com/yourusername/urlshortener.git
-cd urlshortener
